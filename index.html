@@ -49,14 +49,27 @@
 
     <div class='content'></div>
 
-    <script type='module'>
+    <script src='https://cdn.jsdelivr.net/gh/remfs/remfs-auth-client@0.3.0/dist/umd.js'></script>
+    <!--
+    <script src='./lib/remfs-auth-client/dist/umd.js'></script>
+    -->
+    <script>
 
       (async () => {
 
-        const urlParams = new URLSearchParams(window.location.search);
+        let urlParams = new URLSearchParams(window.location.search);
 
         if (urlParams.has('code') && urlParams.has('state')) {
-          await completeAuth(urlParams);
+          const result = await remfsAuthClient.completeAuthorization();
+          localStorage.setItem('access_token', result.accessToken);
+          
+          urlParams = result.urlParams;
+
+          console.log(result);
+
+          urlParams.set('dir', result.state + result.perms[0].path + '/');
+
+          history.pushState(null, '', window.location.pathname + '?' + decodeURIComponent(urlParams.toString()));
         }
 
         const accessToken = localStorage.getItem('access_token');
@@ -66,28 +79,56 @@
         if (dirUrl) {
 
           const urlObj = new URL(dirUrl);
-          const driveUrl = urlObj.origin;
+          const driveUri = urlObj.origin;
           const path = urlObj.pathname;
 
           let remfsUrl = dirUrl + 'remfs.json';
           if (accessToken) {
             remfsUrl += '?access_token=' + accessToken;
           }
+
+          console.log(remfsUrl);
+
           const response = await fetch(remfsUrl);
 
           if (response.status === 200) {
             const remfs = await response.json();
-            render(driveUrl, path, remfs, accessToken);
+            render(driveUri, path, remfs, accessToken);
           }
           else if (response.status === 403) {
             const doAuth = confirm("Unauthorized. Do you want to attempt authorization?");
             if (doAuth) {
-              authorize(driveUrl, path);
+              const trimmedPath = path.endsWith('/') ? path.slice(0, path.length - 1) : path;
+              //const scope = `type=dir;perm=read;path=${trimmedPath}`;
+
+              await remfsAuthClient.authorize({
+                driveUri: driveUri,
+                perms: [
+                  {
+                    type: 'dir',
+                    perm: 'read',
+                    path: trimmedPath,
+                  }
+                ],
+                state: driveUri,
+              });
             }
           }
         }
+        else {
+          const driveUri = prompt("Enter a remFS instance:");
 
-
+          await remfsAuthClient.authorize({
+            driveUri,
+            perms: [
+              {
+                type: 'dir',
+                perm: 'read',
+              }
+            ],
+            state: driveUri,
+          });
+        }
       })();
 
       function render(driveUrl, path, remfs, accessToken) {
@@ -175,114 +216,6 @@
         return path.endsWith('jpg')
           || path.endsWith('JPG')
           ;
-      }
-
-      async function completeAuth(urlParams) {
-        //localStorage.setItem('access_token', stateCode);
-        const code = urlParams.get('code');
-        urlParams.delete('code');
-
-        const savedState = localStorage.getItem('oauthState');
-        localStorage.removeItem('oauthState');
-
-        const returnedState = urlParams.get('state');
-
-        if (savedState !== returnedState.slice(0, savedState.length)) {
-          alert("Invalid state returned from authorization server. Aborting");
-          window.location = window.location.origin;
-        }
-
-        const fsUrl = returnedState.slice(savedState.length);
-        urlParams.delete('state');
-
-        const redirParamsStr = decodeURIComponent(urlParams.toString()); 
-
-        if (redirParamsStr !== '') {
-          history.pushState(null, '', window.location.pathname + '?' + redirParamsStr);
-        }
-        else {
-          history.pushState(null, '', window.location.pathname);
-        }
-
-        const codeVerifier = localStorage.getItem('pkceCodeVerifier');
-        localStorage.removeItem('pkceCodeVerifier');
-
-        const tokenUrl = fsUrl + `?pauth-method=token`
-        const params = `grant_type=authorization_code`
-          + `&client_id=${encodeURIComponent(window.location.origin)}`
-          + `&redirect_uri=${encodeURIComponent(window.location.href)}`
-          + `&code=${code}`
-          + `&code_verifier=${codeVerifier}`;
-
-        const accessToken = await fetch(tokenUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          },
-          body: params,
-        })
-        .then(r => r.json())
-        .then(json => json.access_token);
-
-        localStorage.setItem('access_token', accessToken);
-      }
-
-      async function authorize(driveUrl, dirPath) {
-        const clientId = window.location.origin;
-        const redirectUri = encodeURIComponent(window.location.href);
-
-        const trimmedPath = dirPath.endsWith('/') ? dirPath.slice(0, dirPath.length - 1) : dirPath;
-        const scope = `type=dir;perm=read;path=${trimmedPath}`;
-
-        const stateCode = generateRandomString();
-        const state = encodeURIComponent(stateCode + driveUrl);
-        localStorage.setItem('oauthState', stateCode);
-
-        const pkceCodeVerifier = generateRandomString();
-        localStorage.setItem('pkceCodeVerifier', pkceCodeVerifier);
-
-        const pkceCodeChallenge = await pkceChallengeFromVerifier(pkceCodeVerifier);
-
-        window.location.href = driveUrl
-          + `?pauth-method=authorize`
-          + `&response_type=code`
-          + `&client_id=${clientId}`
-          + `&redirect_uri=${redirectUri}`
-          + `&scope=${scope}`
-          + `&state=${state}`
-          + `&code_challenge=${encodeURIComponent(pkceCodeChallenge)}`
-          + `&code_challenge_method=S256`;
-      }
-
-
-      // The following functions were taken from:
-      // https://github.com/aaronpk/pkce-vanilla-js
-      // Generate a secure random string using the browser crypto functions
-      function generateRandomString() {
-        const array = new Uint32Array(28);
-        window.crypto.getRandomValues(array);
-        return Array.from(array, dec => ('0' + dec.toString(16)).substr(-2)).join('');
-      }
-      // Calculate the SHA256 hash of the input text. 
-      // Returns a promise that resolves to an ArrayBuffer
-      function sha256(plain) {
-        const encoder = new TextEncoder();
-        const data = encoder.encode(plain);
-        return window.crypto.subtle.digest('SHA-256', data);
-      }
-      // Base64-urlencodes the input string
-      function base64urlencode(str) {
-        // Convert the ArrayBuffer to string using Uint8 array to conver to what btoa accepts.
-        // btoa accepts chars only within ascii 0-255 and base64 encodes them.
-        // Then convert the base64 encoded to base64url encoded
-        //   (replace + with -, replace / with _, trim trailing =)
-        return btoa(String.fromCharCode.apply(null, new Uint8Array(str)))
-            .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      }
-      // Return the base64-urlencoded sha256 hash for the PKCE challenge
-      async function pkceChallengeFromVerifier(v) {
-        const hashed = await sha256(v);
-        return base64urlencode(hashed);
       }
 
     </script>
