@@ -18,24 +18,24 @@
         margin: 0 auto;
       }
 
-      .remfs-gallery {
+      .gemdrive-gallery {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
         grid-auto-rows: 128px;
         grid-gap: 4px;
       }
       
-      .remfs-thumbnail {
+      .gemdrive-thumbnail {
         background-color: #222;
       }
-      .remfs-thumbnail__link {
+      .gemdrive-thumbnail__link {
         width: 100%;
         height: 100%;
         display: flex;
         flex-direction: column;
         justify-content: center;
       }
-      .remfs-thumbnail__image {
+      .gemdrive-thumbnail__image {
         width: 100%;
         height: 100%;
         object-fit: contain;
@@ -47,10 +47,7 @@
 
     <div class='content'></div>
 
-    <script src='https://cdn.jsdelivr.net/gh/remfs/remfs-auth-client@0.3.0/dist/umd.js'></script>
-    <!--
-    <script src='./lib/remfs-auth-client/dist/umd.js'></script>
-    -->
+    <script src='https://cdn.jsdelivr.net/gh/gemdrive/gemdrive-auth-client@0.8.0/dist/umd.js'></script>
     <script>
 
       (async () => {
@@ -58,12 +55,10 @@
         let urlParams = new URLSearchParams(window.location.search);
 
         if (urlParams.has('code') && urlParams.has('state')) {
-          const result = await remfsAuthClient.completeAuthorization();
+          const result = await gemdriveAuthClient.completeAuthorization();
           localStorage.setItem('access_token', result.accessToken);
           
           urlParams = result.urlParams;
-
-          console.log(result);
 
           urlParams.set('dir', result.state + result.perms[0].path + '/');
 
@@ -80,18 +75,16 @@
           const driveUri = urlObj.origin;
           const path = urlObj.pathname;
 
-          let remfsUrl = dirUrl + 'remfs.json';
+          let gemUrl = dirUrl + 'remfs.json';
           if (accessToken) {
-            remfsUrl += '?access_token=' + accessToken;
+            gemUrl += '?access_token=' + accessToken;
           }
 
-          console.log(remfsUrl);
-
-          const response = await fetch(remfsUrl);
+          const response = await fetch(gemUrl);
 
           if (response.status === 200) {
-            const remfs = await response.json();
-            render(driveUri, path, remfs, accessToken);
+            const gemData = await response.json();
+            render(driveUri, path, gemData, accessToken);
           }
           else if (response.status === 403) {
             const doAuth = confirm("Unauthorized. Do you want to attempt authorization?");
@@ -99,7 +92,7 @@
               const trimmedPath = path.endsWith('/') ? path.slice(0, path.length - 1) : path;
               //const scope = `type=dir;perm=read;path=${trimmedPath}`;
 
-              await remfsAuthClient.authorize({
+              await gemdriveAuthClient.authorize({
                 driveUri: driveUri,
                 perms: [
                   {
@@ -114,9 +107,9 @@
           }
         }
         else {
-          const driveUri = prompt("Enter a remFS instance:");
+          const driveUri = prompt("Enter a GemDrive instance:");
 
-          await remfsAuthClient.authorize({
+          await gemdriveAuthClient.authorize({
             driveUri,
             perms: [
               {
@@ -129,15 +122,15 @@
         }
       })();
 
-      function render(driveUrl, path, remfs, accessToken) {
-        const gallery = GalleryWidget(driveUrl, path, remfs, accessToken);
+      function render(driveUrl, path, gemData, accessToken) {
+        const gallery = GalleryWidget(driveUrl, path, gemData, accessToken);
         const content = document.querySelector('.content');
         content.appendChild(gallery.dom);
       }
 
-      function GalleryWidget(driveUrl, path, remfs, accessToken) {
+      function GalleryWidget(driveUrl, path, gemData, accessToken) {
         const dom = document.createElement('div');
-        dom.classList.add('remfs-gallery');
+        dom.classList.add('gemdrive-gallery');
 
         const items = {};
 
@@ -154,8 +147,8 @@
         const observeOptions = {};
         const observer = new IntersectionObserver(observeCallback, observeOptions);
 
-        for (const filename in remfs.children) {
-          const child = remfs.children[filename];
+        for (const filename in gemData.children) {
+          const child = gemData.children[filename];
           const childPath = path + filename;
 
           if (isImage(filename)) {
@@ -172,10 +165,10 @@
         };
       }
 
-      function ImageWidget(driveUrl, path, remfs, accessToken) {
+      function ImageWidget(driveUrl, path, gemData, accessToken) {
 
         const dom = document.createElement('div');
-        dom.classList.add('remfs-thumbnail');
+        dom.classList.add('gemdrive-thumbnail');
 
         const url = driveUrl + path;
         let thumbUrl = driveUrl + '/.gemdrive/images/512' + path;
@@ -185,7 +178,7 @@
         }
 
         const link = document.createElement('a');
-        link.classList.add('remfs-thumbnail__link');
+        link.classList.add('gemdrive-thumbnail__link');
         dom.appendChild(link);
         link.setAttribute('href', url);
         link.setAttribute('target', '_blank');
@@ -193,7 +186,7 @@
         function onVisible() {
           const thumbEl = document.createElement('img');
           link.appendChild(thumbEl);
-          thumbEl.classList.add('remfs-thumbnail__image');
+          thumbEl.classList.add('gemdrive-thumbnail__image');
 
           const thumbnailPromise = fetch(thumbUrl)
           .then(response => response.blob());
