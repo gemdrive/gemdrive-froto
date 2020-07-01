@@ -52,73 +52,127 @@
 
       (async () => {
 
-        let urlParams = new URLSearchParams(window.location.search);
-
-        if (urlParams.has('code') && urlParams.has('state')) {
-          const result = await gemdriveAuthClient.completeAuthorization();
-          localStorage.setItem('access_token', result.accessToken);
-          
-          urlParams = result.urlParams;
-
-          urlParams.set('dir', result.state + result.perms[0].path + '/');
-
-          history.pushState(null, '', window.location.pathname + '?' + decodeURIComponent(urlParams.toString()));
-        }
-
-        const accessToken = localStorage.getItem('access_token');
-
-        const dirUrl = urlParams.get('dir');
-
-        if (dirUrl) {
-
-          const urlObj = new URL(dirUrl);
-          const driveUri = urlObj.origin;
-          const path = urlObj.pathname;
-
-          let gemUrl = dirUrl + 'remfs.json';
-          if (accessToken) {
-            gemUrl += '?access_token=' + accessToken;
-          }
-
-          const response = await fetch(gemUrl);
-
-          if (response.status === 200) {
-            const gemData = await response.json();
-            render(driveUri, path, gemData, accessToken);
-          }
-          else if (response.status === 403) {
-            const doAuth = confirm("Unauthorized. Do you want to attempt authorization?");
-            if (doAuth) {
-              const trimmedPath = path.endsWith('/') ? path.slice(0, path.length - 1) : path;
-              //const scope = `type=dir;perm=read;path=${trimmedPath}`;
-
-              await gemdriveAuthClient.authorize({
-                driveUri: driveUri,
-                perms: [
-                  {
-                    type: 'dir',
-                    perm: 'read',
-                    path: trimmedPath,
-                  }
-                ],
-                state: driveUri,
-              });
+        if (window.opener) {
+          window.addEventListener('message', (message) => {
+            if (message.data.command === 'run') {
+              run(message.data.items);
             }
-          }
+          });
+
+          window.opener.postMessage('child-ready');
         }
         else {
-          const driveUri = prompt("Enter a GemDrive instance:");
+          run();
+        }
 
-          await gemdriveAuthClient.authorize({
-            driveUri,
-            perms: [
-              {
-                type: 'dir',
-                perm: 'read',
+        async function run(items) {
+          let urlParams = new URLSearchParams(window.location.search);
+
+          if (urlParams.has('code') && urlParams.has('state')) {
+            const result = await gemdriveAuthClient.completeAuthorization();
+            localStorage.setItem('access_token', result.accessToken);
+            
+            urlParams = result.urlParams;
+
+            urlParams.set('dir', result.state + result.perms[0].path + '/');
+
+            history.pushState(null, '', window.location.pathname + '?' + decodeURIComponent(urlParams.toString()));
+          }
+
+          const accessToken = localStorage.getItem('access_token');
+
+          const dirUrl = urlParams.get('dir');
+
+          if (dirUrl) {
+
+            const urlObj = new URL(dirUrl);
+            const driveUri = urlObj.origin;
+            const path = urlObj.pathname;
+
+            let gemUrl = dirUrl + 'remfs.json';
+            if (accessToken) {
+              gemUrl += '?access_token=' + accessToken;
+            }
+
+            const response = await fetch(gemUrl);
+
+            if (response.status === 200) {
+              const gemData = await response.json();
+              render(driveUri, path, gemData, accessToken);
+            }
+            else if (response.status === 403) {
+              const doAuth = confirm("Unauthorized. Do you want to attempt authorization?");
+              if (doAuth) {
+                const trimmedPath = path.endsWith('/') ? path.slice(0, path.length - 1) : path;
+                //const scope = `type=dir;perm=read;path=${trimmedPath}`;
+
+                await gemdriveAuthClient.authorize({
+                  driveUri: driveUri,
+                  perms: [
+                    {
+                      type: 'dir',
+                      perm: 'read',
+                      path: trimmedPath,
+                    }
+                  ],
+                  state: driveUri,
+                });
               }
-            ],
-            state: driveUri,
-          });
+            }
+          }
+          else if (items) {
+            console.log(items);
+            const dir = items[0];
+            const accessToken = dir.accessToken;
+            const path = dir.path;
+            const driveUri = dir.driveUri;
+
+            let gemUrl = dir.driveUri + dir.path + 'remfs.json';
+
+            if (accessToken) {
+              gemUrl += '?access_token=' + accessToken;
+            }
+
+            const response = await fetch(gemUrl);
+
+            if (response.status === 200) {
+              const gemData = await response.json();
+              render(driveUri, path, gemData, accessToken);
+            }
+            else if (response.status === 403) {
+              const doAuth = confirm("Unauthorized. Do you want to attempt authorization?");
+              if (doAuth) {
+                const trimmedPath = path.endsWith('/') ? path.slice(0, path.length - 1) : path;
+                //const scope = `type=dir;perm=read;path=${trimmedPath}`;
+
+                await gemdriveAuthClient.authorize({
+                  driveUri: driveUri,
+                  perms: [
+                    {
+                      type: 'dir',
+                      perm: 'read',
+                      path: trimmedPath,
+                    }
+                  ],
+                  state: driveUri,
+                });
+              }
+            }
+          }
+          else {
+            const driveUri = prompt("Enter a GemDrive instance:");
+
+            await gemdriveAuthClient.authorize({
+              driveUri,
+              perms: [
+                {
+                  type: 'dir',
+                  perm: 'read',
+                }
+              ],
+              state: driveUri,
+            });
+          }
         }
       })();
 
@@ -126,6 +180,7 @@
         const gallery = GalleryWidget(driveUrl, path, gemData, accessToken);
         const content = document.querySelector('.content');
         content.appendChild(gallery.dom);
+        console.log(gemData);
       }
 
       function GalleryWidget(driveUrl, path, gemData, accessToken) {
