@@ -226,7 +226,8 @@
         dom.classList.add('gemdrive-thumbnail');
 
         const url = driveUrl + path;
-        let thumbUrl = driveUrl + '/.gemdrive/images/512' + path;
+        const ext = path.slice(-4).toLowerCase();
+        let thumbUrl = driveUrl + path + '.gemdrive-img-512' + ext;
 
         if (accessToken) {
           thumbUrl += '?access_token=' + accessToken;
