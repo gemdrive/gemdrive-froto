@@ -47,7 +47,9 @@
 
     <div class='content'></div>
 
+    <!--
     <script src='https://cdn.jsdelivr.net/gh/gemdrive/gemdrive-auth-client@0.8.0/dist/umd.js'></script>
+    -->
     <script>
 
       (async () => {
@@ -68,28 +70,27 @@
         async function run(items) {
           let urlParams = new URLSearchParams(window.location.search);
 
-          if (urlParams.has('code') && urlParams.has('state')) {
-            const result = await gemdriveAuthClient.completeAuthorization();
-            localStorage.setItem('access_token', result.accessToken);
-            
-            urlParams = result.urlParams;
+          //if (urlParams.has('code') && urlParams.has('state')) {
+          //  const result = await gemdriveAuthClient.completeAuthorization();
+          //  localStorage.setItem('access_token', result.accessToken);
+          //  
+          //  urlParams = result.urlParams;
 
-            urlParams.set('dir', result.state + result.perms[0].path + '/');
+          //  urlParams.set('dir', result.state + result.perms[0].path + '/');
 
-            history.pushState(null, '', window.location.pathname + '?' + decodeURIComponent(urlParams.toString()));
-          }
+          //  history.pushState(null, '', window.location.pathname + '?' + decodeURIComponent(urlParams.toString()));
+          //}
 
           const accessToken = localStorage.getItem('access_token');
 
-          const dirUrl = urlParams.get('dir');
+          const driveUri = urlParams.get('drive');
+          const path = urlParams.get('path');
 
-          if (dirUrl) {
+          const driveUrl = 'https://' + driveUri;
 
-            const urlObj = new URL(dirUrl);
-            const driveUri = urlObj.origin;
-            const path = urlObj.pathname;
+          if (driveUrl && path) {
 
-            let gemUrl = dirUrl + 'remfs.json';
+            let gemUrl = driveUrl + '/gemdrive/index' + path + 'list.json';
             if (accessToken) {
               gemUrl += '?access_token=' + accessToken;
             }
@@ -98,7 +99,7 @@
 
             if (response.status === 200) {
               const gemData = await response.json();
-              render(driveUri, path, gemData, accessToken);
+              render(driveUrl, path, gemData, accessToken);
             }
             else if (response.status === 403) {
               const doAuth = confirm("Unauthorized. Do you want to attempt authorization?");
@@ -227,7 +228,7 @@
 
         const url = driveUrl + path;
         const ext = path.slice(-4).toLowerCase();
-        let thumbUrl = driveUrl + path + '.gemdrive-img-512' + ext;
+        let thumbUrl = driveUrl + '/gemdrive/images/512' + path;
 
         if (accessToken) {
           thumbUrl += '?access_token=' + accessToken;
